@@ -87,7 +87,7 @@ async function handleLogin() {
         response_type: 'code',
         client_id: clientId,
         scope: scopes,
-        redirect_uri: redirectUri,
+        redirect_uri: window.location.origin + window.location.pathname,
         state: state,
         code_challenge_method: 'S256',
         code_challenge: codeChallenge
