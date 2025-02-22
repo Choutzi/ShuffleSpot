@@ -2,12 +2,14 @@ import { handleLogin, handleRedirect, makeApiCall, getValidToken } from './spoti
 
 const loginButton = document.getElementById('login-button');
 const playlistContainer = document.getElementById('playlist-container');
+let currentOffset = 0;
+const playlistDisplayLimit = 20;
 
 loginButton.addEventListener('click', handleLogin);
 
-async function fetchPlaylists() {
+async function fetchPlaylists(offset = 0) {
     try {
-        const response = await makeApiCall('https://api.spotify.com/v1/me/playlists');
+        const response = await makeApiCall(`https://api.spotify.com/v1/me/playlists?limit=${playlistDisplayLimit}&offset=${offset}`);
         if (!response) return;
 
         if (!response.ok) {
@@ -15,15 +17,21 @@ async function fetchPlaylists() {
         }
 
         const data = await response.json();
-        displayPlaylists(data.items);
+        displayPlaylists(data.items, data.total);
     } catch (error) {
         console.error('Error fetching playlists:', error);
         playlistContainer.innerHTML = '<p>Error fetching playlists. Please try logging in again.</p>';
     }
 }
 
-function displayPlaylists(playlists) {
+function displayPlaylists(playlists, total) {
     playlistContainer.innerHTML = '<h2>Your Playlists</h2>';
+
+    const refreshButton = document.createElement('button');
+    refreshButton.textContent = 'Refresh Playlists';
+    refreshButton.onclick = () => fetchPlaylists(currentOffset);
+    playlistContainer.appendChild(refreshButton);
+
     const ul = document.createElement('ul');
     playlists.forEach(playlist => {
         const li = document.createElement('li');
@@ -35,6 +43,28 @@ function displayPlaylists(playlists) {
         ul.appendChild(li);
     });
     playlistContainer.appendChild(ul);
+
+    // Add pagination controls
+    const paginationDiv = document.createElement('div');
+    if (currentOffset > 0) {
+        const prevButton = document.createElement('button');
+        prevButton.textContent = 'Previous';
+        prevButton.onclick = () => {
+            currentOffset -= playlistDisplayLimit;
+            fetchPlaylists(currentOffset);
+        };
+        paginationDiv.appendChild(prevButton);
+    }
+    if (currentOffset + playlistDisplayLimit < total) {
+        const nextButton = document.createElement('button');
+        nextButton.textContent = 'Next';
+        nextButton.onclick = () => {
+            currentOffset += playlistDisplayLimit;
+            fetchPlaylists(currentOffset);
+        };
+        paginationDiv.appendChild(nextButton);
+    }
+    playlistContainer.appendChild(paginationDiv);
 }
 
 async function shufflePlaylist(playlistId) {
