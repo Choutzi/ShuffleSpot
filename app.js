@@ -1,75 +1,14 @@
-const clientId = 'YOUR_CLIENT_ID'; // You'll set this as a GitHub secret
-const scopes = 'playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public';
-
-let codeVerifier = generateRandomString(128);
+import { handleLogin, handleRedirect, makeApiCall, getValidToken } from './spotify-auth.js';
 
 const loginButton = document.getElementById('login-button');
 const playlistContainer = document.getElementById('playlist-container');
 
 loginButton.addEventListener('click', handleLogin);
 
-function handleLogin() {
-    let state = generateRandomString(16);
-    let codeChallenge = generateCodeChallenge(codeVerifier);
-
-    localStorage.setItem('code_verifier', codeVerifier);
-
-    let args = new URLSearchParams({
-        response_type: 'code',
-        client_id: clientId,
-        scope: scopes,
-        redirect_uri: window.location.origin + window.location.pathname,
-        state: state,
-        code_challenge_method: 'S256',
-        code_challenge: codeChallenge
-    });
-
-    window.location = 'https://accounts.spotify.com/authorize?' + args;
-}
-
-function handleRedirect() {
-    let code = getCode();
-    fetchAccessToken(code);
-}
-
-function fetchAccessToken(code) {
-    let codeVerifier = localStorage.getItem('code_verifier');
-
-    let body = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: window.location.origin + window.location.pathname,
-        client_id: clientId,
-        code_verifier: codeVerifier
-    });
-
-    fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: body
-    })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('HTTP status ' + response.status);
-            }
-            return response.json();
-        })
-        .then(data => {
-            localStorage.setItem('access_token', data.access_token);
-            fetchPlaylists();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
-}
-
 async function fetchPlaylists() {
     try {
-        const response = await fetch('https://api.spotify.com/v1/me/playlists', {
-            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') }
-        });
+        const response = await makeApiCall('https://api.spotify.com/v1/me/playlists');
+        if (!response) return;
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -100,12 +39,9 @@ function displayPlaylists(playlists) {
 
 async function shufflePlaylist(playlistId) {
     try {
-        const tracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') }
-        });
-
-        if (!tracksResponse.ok) {
-            throw new Error(`HTTP error! status: ${tracksResponse.status}`);
+        const tracksResponse = await makeApiCall(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`);
+        if (!tracksResponse?.ok) {
+            throw new Error(`HTTP error! status: ${tracksResponse?.status}`);
         }
 
         const tracksData = await tracksResponse.json();
@@ -117,18 +53,10 @@ async function shufflePlaylist(playlistId) {
             [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
         }
 
-        // Update the playlist with the shuffled tracks
-        const updateResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': 'Bearer ' + localStorage.getItem('access_token'),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ uris: tracks.map(track => track.uri) })
-        });
+        const updateResponse = await makeApiCall(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, 'PUT', { uris: tracks.map(track => track.uri) });
 
-        if (!updateResponse.ok) {
-            throw new Error(`HTTP error! status: ${updateResponse.status}`);
+        if (!updateResponse?.ok) {
+            throw new Error(`HTTP error! status: ${updateResponse?.status}`);
         }
 
         alert('Playlist shuffled successfully!');
@@ -138,33 +66,16 @@ async function shufflePlaylist(playlistId) {
     }
 }
 
-function generateRandomString(length) {
-    let text = '';
-    let possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-    for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
-
-function generateCodeChallenge(codeVerifier) {
-    return base64URL(CryptoJS.SHA256(codeVerifier));
-}
-
-function base64URL(string) {
-    return string.toString(CryptoJS.enc.Base64).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-function getCode() {
-    let code = null;
-    const urlParams = new URLSearchParams(window.location.search);
-    code = urlParams.get('code');
-    return code;
-}
-
-window.onload = function () {
-    if (window.location.search.length > 0) {
-        handleRedirect();
+window.onload = async function () {
+    const token = await getValidToken();
+    if (token) {
+        fetchPlaylists();
+    } else if (window.location.search.length > 0) {
+        const newToken = await handleRedirect();
+        if (newToken) {
+            fetchPlaylists();
+        }
+    } else {
+        loginButton.style.display = 'block';
     }
 };

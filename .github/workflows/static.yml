@@ -26,7 +26,7 @@ jobs:
 
       - name: Inject Spotify Client ID
         run: |
-          sed -i 's/YOUR_CLIENT_ID/${{ secrets.SPOTIFY_CLIENT_ID }}/g' app.js
+          sed -i 's/YOUR_CLIENT_ID/${{ secrets.SPOTIFY_CLIENT_ID }}/g' spotify-auth.js
             
       - name: Setup Pages
         uses: actions/configure-pages@v5
