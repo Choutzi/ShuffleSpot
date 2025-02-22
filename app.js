@@ -18,7 +18,7 @@ function handleLogin() {
         response_type: 'code',
         client_id: clientId,
         scope: scopes,
-        redirect_uri: window.location.href,
+        redirect_uri: window.location.origin + window.location.pathname,
         state: state,
         code_challenge_method: 'S256',
         code_challenge: codeChallenge
@@ -38,7 +38,7 @@ function fetchAccessToken(code) {
     let body = new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: window.location.href,
+        redirect_uri: window.location.origin + window.location.pathname,
         client_id: clientId,
         code_verifier: codeVerifier
     });
