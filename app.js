@@ -1,4 +1,4 @@
-import { handleLogin, handleRedirect, makeApiCall, getValidToken } from './spotify-auth.js';
+import { handleLogin, initializeAuth, makeApiCall } from './spotify-auth.js';
 
 const loginButton = document.getElementById('login-button');
 const playlistContainer = document.getElementById('playlist-container');
@@ -97,14 +97,10 @@ async function shufflePlaylist(playlistId) {
 }
 
 window.onload = async function () {
-    const token = await getValidToken();
+    const token = await initializeAuth();
     if (token) {
+        loginButton.style.display = 'none';
         fetchPlaylists();
-    } else if (window.location.search.length > 0) {
-        const newToken = await handleRedirect();
-        if (newToken) {
-            fetchPlaylists();
-        }
     } else {
         loginButton.style.display = 'block';
     }

@@ -1,4 +1,7 @@
+// spotify-auth.js
+
 const clientId = 'YOUR_CLIENT_ID';
+const redirectUri = window.location.origin + window.location.pathname;
 const scopes = 'playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public';
 
 function generateRandomString(length) {
@@ -21,15 +24,12 @@ function base64URLEncode(buffer) {
         .replace(/=+$/, '');
 }
 
-function getCode() {
-    let code = null;
-    const urlParams = new URLSearchParams(window.location.search);
-    code = urlParams.get('code');
-    return code;
+function storeCode(code) {
+    localStorage.setItem('spotifyAuthCode', code);
 }
 
-function getRedirectUri() {
-    return window.location.origin + window.location.pathname;
+function getStoredCode() {
+    return localStorage.getItem('spotifyAuthCode');
 }
 
 function storeTokens(accessToken, refreshToken, expiresIn) {
@@ -40,7 +40,7 @@ function storeTokens(accessToken, refreshToken, expiresIn) {
     localStorage.setItem('spotifyTokenExpiry', expiryTime);
 }
 
-function checkStoredToken() {
+function getStoredToken() {
     const accessToken = localStorage.getItem('spotifyAccessToken');
     const expiryTime = localStorage.getItem('spotifyTokenExpiry');
 
@@ -84,7 +84,6 @@ async function handleLogin() {
     let codeVerifier = generateRandomString(64);
     let state = generateRandomString(16);
     let codeChallenge = await generateCodeChallenge(codeVerifier);
-    let redirect_uri = getRedirectUri();
 
     localStorage.setItem('code_verifier', codeVerifier);
 
@@ -92,7 +91,7 @@ async function handleLogin() {
         response_type: 'code',
         client_id: clientId,
         scope: scopes,
-        redirect_uri: redirect_uri,
+        redirect_uri: redirectUri,
         state: state,
         code_challenge_method: 'S256',
         code_challenge: codeChallenge
@@ -102,42 +101,55 @@ async function handleLogin() {
 }
 
 async function handleRedirect() {
-    let code = getCode();
+    let code = new URLSearchParams(window.location.search).get('code');
+    if (code) {
+        storeCode(code);
+    } else {
+        code = getStoredCode();
+    }
+
+    if (!code) {
+        return null;
+    }
+
     let codeVerifier = localStorage.getItem('code_verifier');
-    let redirect_uri = getRedirectUri();
 
     let body = new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: redirect_uri,
+        redirect_uri: redirectUri,
         client_id: clientId,
         code_verifier: codeVerifier
     });
 
-    const response = await fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: body
-    });
+    try {
+        const response = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: body
+        });
 
-    if (response.ok) {
-        const data = await response.json();
-        storeTokens(data.access_token, data.refresh_token, data.expires_in);
-        return data.access_token;
-    } else {
-        console.error('Error:', await response.text());
+        if (response.ok) {
+            const data = await response.json();
+            storeTokens(data.access_token, data.refresh_token, data.expires_in);
+            return data.access_token;
+        } else {
+            console.error('Error:', await response.text());
+            return null;
+        }
+    } catch (error) {
+        console.error('Error in handleRedirect:', error);
         return null;
     }
 }
 
 async function getValidToken() {
-    let accessToken = checkStoredToken();
+    let accessToken = getStoredToken();
     if (!accessToken) {
         accessToken = await refreshAccessToken();
         if (!accessToken) {
-            handleLogin();
             return null;
         }
     }
@@ -162,7 +174,6 @@ async function makeApiCall(url, method = 'GET', body = null) {
         if (accessToken) {
             return makeApiCall(url, method, body);
         } else {
-            handleLogin();
             return null;
         }
     }
@@ -170,4 +181,12 @@ async function makeApiCall(url, method = 'GET', body = null) {
     return response;
 }
 
-export { handleLogin, handleRedirect, makeApiCall, getValidToken };
+async function initializeAuth() {
+    const code = new URLSearchParams(window.location.search).get('code') || getStoredCode();
+    if (code) {
+        return await handleRedirect();
+    }
+    return null;
+}
+
+export { handleLogin, initializeAuth, makeApiCall };
