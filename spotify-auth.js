@@ -28,6 +28,10 @@ function getCode() {
     return code;
 }
 
+function getRedirectUri() {
+    return window.location.origin + window.location.pathname;
+}
+
 function storeTokens(accessToken, refreshToken, expiresIn) {
     const now = new Date();
     const expiryTime = now.getTime() + expiresIn * 1000;
@@ -80,6 +84,7 @@ async function handleLogin() {
     let codeVerifier = generateRandomString(64);
     let state = generateRandomString(16);
     let codeChallenge = await generateCodeChallenge(codeVerifier);
+    let redirect_uri = getRedirectUri();
 
     localStorage.setItem('code_verifier', codeVerifier);
 
@@ -87,7 +92,7 @@ async function handleLogin() {
         response_type: 'code',
         client_id: clientId,
         scope: scopes,
-        redirect_uri: window.location.origin + window.location.pathname,
+        redirect_uri: redirect_uri,
         state: state,
         code_challenge_method: 'S256',
         code_challenge: codeChallenge
@@ -99,11 +104,12 @@ async function handleLogin() {
 async function handleRedirect() {
     let code = getCode();
     let codeVerifier = localStorage.getItem('code_verifier');
+    let redirect_uri = getRedirectUri();
 
     let body = new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: window.location.origin + window.location.pathname,
+        redirect_uri: redirect_uri,
         client_id: clientId,
         code_verifier: codeVerifier
     });
